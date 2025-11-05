@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from models.reserva import Reserva
 from tools.jwt_required import jwt_token_requerido
+from datetime import datetime
 
 #Crear un módulo blueprint para implementar el servicio web de reservas
 ws_reserva = Blueprint('ws_reserva', __name__)
@@ -24,6 +25,20 @@ def registrar():
     #Validar si contamos con los parámetros obligatorios (observacion puede estar vacía)
     if not all([pasajero_id, fecha_reserva, detalles_viaje]):
         return jsonify({'status': False, 'data': None, 'message': 'Faltan datos obligatorios: pasajero_id, fecha_reserva y detalles_viaje son requeridos'}), 400
+    
+    # Normalizar el formato de fecha (aceptar tanto 2025/11/05 como 2025-11-05)
+    try:
+        # Intentar convertir si viene con formato YYYY/MM/DD
+        if '/' in fecha_reserva:
+            fecha_obj = datetime.strptime(fecha_reserva, "%Y/%m/%d")
+            fecha_reserva = fecha_obj.strftime("%Y-%m-%d")
+        # Si ya viene en formato YYYY-MM-DD, validar que sea válida
+        elif '-' in fecha_reserva:
+            datetime.strptime(fecha_reserva, "%Y-%m-%d")
+        else:
+            return jsonify({'status': False, 'data': None, 'message': 'Formato de fecha inválido. Use YYYY-MM-DD o YYYY/MM/DD'}), 400
+    except ValueError as e:
+        return jsonify({'status': False, 'data': None, 'message': f'Formato de fecha inválido: {str(e)}. Use YYYY-MM-DD o YYYY/MM/DD'}), 400
     
     #Validar que detalles_viaje no sea una lista vacia
     if not isinstance(detalles_viaje, list) or not detalles_viaje:
