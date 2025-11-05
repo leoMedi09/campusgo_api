@@ -68,35 +68,58 @@ class Reserva:
                     raise Exception (f"El viaje ID {viaje_id} no existe")
                 
                 #Extraer la fecha de viaje y comparar con la fecha de reserva
-                # Asegurar que ambas fechas estén en formato YYYY-MM-DD para la comparación
+                # Normalizar ambas fechas a formato YYYY-MM-DD (con guiones) para compararlas
+                from datetime import datetime, date
+                
+                # Obtener la fecha del viaje de la BD y normalizarla a YYYY-MM-DD
                 fecha_viaje_raw = resultado_fecha["fecha_viaje"]
-                if isinstance(fecha_viaje_raw, str):
-                    fecha_viaje_str = fecha_viaje_raw
-                else:
-                    # Si es un objeto date o datetime, convertirlo a string en formato YYYY-MM-DD
-                    fecha_viaje_str = str(fecha_viaje_raw)
-                    # Intentar parsear y normalizar al formato YYYY-MM-DD
+                
+                # Convertir fecha_viaje_raw a string en formato YYYY-MM-DD
+                # La función date() de MySQL devuelve un objeto date de Python
+                if isinstance(fecha_viaje_raw, date):
+                    # Si es un objeto date, convertir directamente a YYYY-MM-DD
+                    fecha_viaje_str = fecha_viaje_raw.strftime("%Y-%m-%d")
+                elif isinstance(fecha_viaje_raw, datetime):
+                    # Si es datetime, extraer solo la fecha y convertir a YYYY-MM-DD
+                    fecha_viaje_str = fecha_viaje_raw.date().strftime("%Y-%m-%d")
+                elif isinstance(fecha_viaje_raw, str):
+                    # Si es string, parsear y normalizar a YYYY-MM-DD
+                    fecha_str = fecha_viaje_raw.split()[0] if ' ' in fecha_viaje_raw else fecha_viaje_raw
                     try:
-                        from datetime import datetime
-                        if ' ' in fecha_viaje_str:
-                            fecha_obj_temp = datetime.strptime(fecha_viaje_str.split()[0], "%Y-%m-%d")
+                        if '-' in fecha_str:
+                            fecha_obj_temp = datetime.strptime(fecha_str, "%Y-%m-%d").date()
+                        elif '/' in fecha_str:
+                            fecha_obj_temp = datetime.strptime(fecha_str, "%Y/%m/%d").date()
                         else:
-                            fecha_obj_temp = datetime.strptime(fecha_viaje_str, "%Y-%m-%d")
+                            # Intentar parsear como ISO
+                            fecha_obj_temp = date.fromisoformat(fecha_str)
                         fecha_viaje_str = fecha_obj_temp.strftime("%Y-%m-%d")
                     except:
-                        pass  # Si no se puede parsear, usar el string tal cual
-                
-                # Normalizar la fecha de reserva también (por si acaso)
-                fecha_reserva_normalizada = fecha_reserva
-                if '/' in fecha_reserva:
+                        # Si falla, usar el string tal cual (esperando que ya esté en YYYY-MM-DD)
+                        fecha_viaje_str = fecha_str
+                else:
+                    # Para cualquier otro tipo, convertir a string y parsear
+                    fecha_str = str(fecha_viaje_raw).split()[0] if ' ' in str(fecha_viaje_raw) else str(fecha_viaje_raw)
                     try:
-                        from datetime import datetime
-                        fecha_obj_temp = datetime.strptime(fecha_reserva, "%Y/%m/%d")
-                        fecha_reserva_normalizada = fecha_obj_temp.strftime("%Y-%m-%d")
+                        if hasattr(fecha_viaje_raw, 'date'):
+                            fecha_obj_temp = fecha_viaje_raw.date()
+                        else:
+                            fecha_obj_temp = date.fromisoformat(fecha_str)
+                        fecha_viaje_str = fecha_obj_temp.strftime("%Y-%m-%d")
                     except:
-                        fecha_reserva_normalizada = fecha_reserva
+                        fecha_viaje_str = fecha_str
                 
-                # Comparar las fechas normalizadas
+                # Normalizar fecha_reserva a YYYY-MM-DD (ya debería venir normalizada del endpoint)
+                if '/' in fecha_reserva:
+                    fecha_obj_temp = datetime.strptime(fecha_reserva, "%Y/%m/%d").date()
+                    fecha_reserva_normalizada = fecha_obj_temp.strftime("%Y-%m-%d")
+                elif '-' in fecha_reserva:
+                    # Ya está en formato YYYY-MM-DD, solo asegurarnos de que no tenga hora
+                    fecha_reserva_normalizada = fecha_reserva.split()[0] if ' ' in fecha_reserva else fecha_reserva
+                else:
+                    fecha_reserva_normalizada = fecha_reserva
+                
+                # Comparar las fechas normalizadas (ambas en formato YYYY-MM-DD con guiones)
                 if fecha_viaje_str != fecha_reserva_normalizada:
                     raise Exception(f"La fecha del viaje ID {viaje_id} es el {fecha_viaje_str} no el {fecha_reserva_normalizada}" )
                 
