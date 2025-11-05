@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
-from models.entrada import Entrada
-from tools.jwt_required import jwt_token_requerido
+from ..models.entrada import Entrada
+from ..tools.jwt_required import jwt_token_requerido
 
 # Crear blueprint
 ws_entrada = Blueprint('ws_entrada', __name__)

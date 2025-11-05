@@ -29,16 +29,29 @@ def registrar():
     if not isinstance(detalles_viaje, list) or not detalles_viaje:
         return jsonify({'status': False, 'data': None, 'message': 'Detalles de viaje debe ser una lista con al menos un viaje'}), 400
     
+    #Validar que cada detalle de viaje tenga los campos requeridos
+    for idx, detalle in enumerate(detalles_viaje):
+        if not isinstance(detalle, dict):
+            return jsonify({'status': False, 'data': None, 'message': f'El detalle de viaje #{idx + 1} no es un objeto válido'}), 400
+        if not all([detalle.get("viaje_id"), detalle.get("estado_id"), detalle.get("asiento_id")]):
+            return jsonify({'status': False, 'data': None, 'message': f'El detalle de viaje #{idx + 1} debe incluir viaje_id, estado_id y asiento_id'}), 400
+    
     #Registrar la reserva
     try:
-        #Llamar al método reggistrar de la clase Reserva
-        resultado, mensaje = reserva.registrar(pasajero_id, fecha_reserva, observacion, detalles_viaje)
+        #Llamar al método registrar de la clase Reserva
+        resultado, respuesta = reserva.registrar(pasajero_id, fecha_reserva, observacion, detalles_viaje)
         
         if resultado:
-            return jsonify({'status': True, 'data': None, 'message': mensaje}), 200
+            # Si resultado es True, respuesta contiene los datos de la reserva
+            return jsonify({
+                'status': True, 
+                'data': respuesta, 
+                'message': 'Reserva registrada exitosamente'
+            }), 200
         else:
-            #En caso de error (no hay asientos disponibles, algún dato que no se registro, etc)
-            return jsonify({'status': False, 'data': None, 'message': mensaje}), 500
+            # En caso de error (no hay asientos disponibles, algún dato que no se registro, etc)
+            # respuesta contiene el mensaje de error
+            return jsonify({'status': False, 'data': None, 'message': respuesta}), 500
             
     except Exception as e:
         #Manejo de errores internos en el servidor

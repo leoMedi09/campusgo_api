@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime
-from models.evento import Evento  # Correcto: instanciamos la clase Evento
-from tools.jwt_required import jwt_token_requerido
+from ..models.evento import Evento  # Correcto: instanciamos la clase Evento
+from ..tools.jwt_required import jwt_token_requerido
 
 # Crear un módulo para implementar el servicio web de reservas
 ws_evento = Blueprint('ws_evento', __name__)  # Corregí el nombre del Blueprint
