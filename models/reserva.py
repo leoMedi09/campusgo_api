@@ -68,9 +68,37 @@ class Reserva:
                     raise Exception (f"El viaje ID {viaje_id} no existe")
                 
                 #Extraer la fecha de viaje y comparar con la fecha de reserva
-                fecha_viaje_str = str(resultado_fecha["fecha_viaje"])
-                if fecha_viaje_str != fecha_reserva:
-                    raise Exception(f"La fecha del viaje ID {viaje_id} es el {fecha_viaje_str} no el {fecha_reserva}" )
+                # Asegurar que ambas fechas estén en formato YYYY-MM-DD para la comparación
+                fecha_viaje_raw = resultado_fecha["fecha_viaje"]
+                if isinstance(fecha_viaje_raw, str):
+                    fecha_viaje_str = fecha_viaje_raw
+                else:
+                    # Si es un objeto date o datetime, convertirlo a string en formato YYYY-MM-DD
+                    fecha_viaje_str = str(fecha_viaje_raw)
+                    # Intentar parsear y normalizar al formato YYYY-MM-DD
+                    try:
+                        from datetime import datetime
+                        if ' ' in fecha_viaje_str:
+                            fecha_obj_temp = datetime.strptime(fecha_viaje_str.split()[0], "%Y-%m-%d")
+                        else:
+                            fecha_obj_temp = datetime.strptime(fecha_viaje_str, "%Y-%m-%d")
+                        fecha_viaje_str = fecha_obj_temp.strftime("%Y-%m-%d")
+                    except:
+                        pass  # Si no se puede parsear, usar el string tal cual
+                
+                # Normalizar la fecha de reserva también (por si acaso)
+                fecha_reserva_normalizada = fecha_reserva
+                if '/' in fecha_reserva:
+                    try:
+                        from datetime import datetime
+                        fecha_obj_temp = datetime.strptime(fecha_reserva, "%Y/%m/%d")
+                        fecha_reserva_normalizada = fecha_obj_temp.strftime("%Y-%m-%d")
+                    except:
+                        fecha_reserva_normalizada = fecha_reserva
+                
+                # Comparar las fechas normalizadas
+                if fecha_viaje_str != fecha_reserva_normalizada:
+                    raise Exception(f"La fecha del viaje ID {viaje_id} es el {fecha_viaje_str} no el {fecha_reserva_normalizada}" )
                 
                 #5.0.1 Validar que el asiento existe y no esté ya reservado para este viaje
                 cursor.execute(sql_validar_asiento, [asiento_id, viaje_id])

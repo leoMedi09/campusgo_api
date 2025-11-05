@@ -26,18 +26,21 @@ def registrar():
     if not all([pasajero_id, fecha_reserva, detalles_viaje]):
         return jsonify({'status': False, 'data': None, 'message': 'Faltan datos obligatorios: pasajero_id, fecha_reserva y detalles_viaje son requeridos'}), 400
     
-    # Normalizar el formato de fecha (aceptar tanto 2025/11/05 como 2025-11-05)
+    # Normalizar el formato de fecha a YYYY-MM-DD (año-mes-día con guiones)
+    # Acepta tanto 2025/11/05 como 2025-11-05 y siempre convierte a 2025-11-05
     try:
         fecha_obj = None
         # Intentar convertir si viene con formato YYYY/MM/DD
         if '/' in fecha_reserva:
             fecha_obj = datetime.strptime(fecha_reserva, "%Y/%m/%d").date()
-            fecha_reserva = fecha_obj.strftime("%Y-%m-%d")
-        # Si ya viene en formato YYYY-MM-DD, validar que sea válida
+        # Si ya viene en formato YYYY-MM-DD, parsear directamente
         elif '-' in fecha_reserva:
             fecha_obj = datetime.strptime(fecha_reserva, "%Y-%m-%d").date()
         else:
             return jsonify({'status': False, 'data': None, 'message': 'Formato de fecha inválido. Use YYYY-MM-DD o YYYY/MM/DD'}), 400
+        
+        # SIEMPRE normalizar al formato YYYY-MM-DD (con guiones)
+        fecha_reserva = fecha_obj.strftime("%Y-%m-%d")
         
         # Validar que la fecha de reserva sea del día de hoy en adelante
         fecha_hoy = date.today()
