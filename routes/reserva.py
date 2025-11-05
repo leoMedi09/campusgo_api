@@ -18,12 +18,12 @@ def registrar():
     #Pasar los datos a variables
     pasajero_id = data.get("pasajero_id")
     fecha_reserva = data.get("fecha_reserva") #La fecha en la que el usuario desea viajar
-    observacion = data.get("observacion")
+    observacion = data.get("observacion") or ""  # Observación puede estar vacía
     detalles_viaje = data.get("detalles_viaje")
     
-    #Validar si contamos con los parámetros de email y clave
-    if not all([pasajero_id, fecha_reserva, observacion, detalles_viaje]):
-        return jsonify({'status': False, 'data': None, 'message': 'Faltan datos obligatorios'}), 400
+    #Validar si contamos con los parámetros obligatorios (observacion puede estar vacía)
+    if not all([pasajero_id, fecha_reserva, detalles_viaje]):
+        return jsonify({'status': False, 'data': None, 'message': 'Faltan datos obligatorios: pasajero_id, fecha_reserva y detalles_viaje son requeridos'}), 400
     
     #Validar que detalles_viaje no sea una lista vacia
     if not isinstance(detalles_viaje, list) or not detalles_viaje:
@@ -35,9 +35,22 @@ def registrar():
             return jsonify({'status': False, 'data': None, 'message': f'El detalle de viaje #{idx + 1} no es un objeto válido'}), 400
         if not all([detalle.get("viaje_id"), detalle.get("estado_id"), detalle.get("asiento_id")]):
             return jsonify({'status': False, 'data': None, 'message': f'El detalle de viaje #{idx + 1} debe incluir viaje_id, estado_id y asiento_id'}), 400
+        # Validar que los valores sean números enteros
+        try:
+            detalle["viaje_id"] = int(detalle["viaje_id"])
+            detalle["estado_id"] = int(detalle["estado_id"])
+            detalle["asiento_id"] = int(detalle["asiento_id"])
+        except (ValueError, TypeError):
+            return jsonify({'status': False, 'data': None, 'message': f'El detalle de viaje #{idx + 1} tiene valores inválidos (viaje_id, estado_id y asiento_id deben ser números enteros)'}), 400
     
     #Registrar la reserva
     try:
+        # Validar tipos de datos
+        try:
+            pasajero_id = int(pasajero_id)
+        except (ValueError, TypeError):
+            return jsonify({'status': False, 'data': None, 'message': 'pasajero_id debe ser un número entero'}), 400
+        
         #Llamar al método registrar de la clase Reserva
         resultado, respuesta = reserva.registrar(pasajero_id, fecha_reserva, observacion, detalles_viaje)
         
@@ -51,11 +64,13 @@ def registrar():
         else:
             # En caso de error (no hay asientos disponibles, algún dato que no se registro, etc)
             # respuesta contiene el mensaje de error
-            return jsonify({'status': False, 'data': None, 'message': respuesta}), 500
+            return jsonify({'status': False, 'data': None, 'message': str(respuesta)}), 500
             
     except Exception as e:
         #Manejo de errores internos en el servidor
-        return jsonify({'status': False, 'data': None, 'message': f'Error interno:{str(e)}'}), 500
+        import traceback
+        error_msg = str(e)
+        return jsonify({'status': False, 'data': None, 'message': f'Error interno: {error_msg}'}), 500
    
    
     

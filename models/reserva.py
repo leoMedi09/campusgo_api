@@ -101,9 +101,9 @@ class Reserva:
                 
                 # Guardar el detalle registrado para la respuesta
                 detalles_registrados.append({
-                    "viaje_id": viaje_id,
-                    "estado_id": estado_id,
-                    "asiento_id": asiento_id
+                    "viaje_id": int(viaje_id),
+                    "estado_id": int(estado_id),
+                    "asiento_id": int(asiento_id)
                 })
             
             #6. Confirmar la transacción (Registro de la reserva, registro de la reserva viaje y la actualización de asientos disponibles)
@@ -118,13 +118,34 @@ class Reserva:
             cursor.execute(sql_consultar_reserva, [reserva_id])
             reserva_data = cursor.fetchone()
             
-            # Construir la respuesta
+            # Función auxiliar para convertir fechas a string de forma segura
+            def convertir_fecha(fecha):
+                if fecha is None:
+                    return None
+                if isinstance(fecha, str):
+                    return fecha
+                return str(fecha)
+            
+            # Extraer datos de forma segura (el cursor es DictCursor, así que siempre será dict)
+            if isinstance(reserva_data, dict):
+                pasajero_id_resp = reserva_data.get("pasajero_id")
+                fecha_reserva_resp = convertir_fecha(reserva_data.get("fecha_reserva"))
+                observacion_resp = reserva_data.get("observacion") or ""
+                fecha_creacion_resp = convertir_fecha(reserva_data.get("fecha_creacion"))
+            else:
+                # Fallback por si acaso no es dict
+                pasajero_id_resp = reserva_data[1] if len(reserva_data) > 1 else None
+                fecha_reserva_resp = convertir_fecha(reserva_data[2] if len(reserva_data) > 2 else None)
+                observacion_resp = reserva_data[3] if len(reserva_data) > 3 else ""
+                fecha_creacion_resp = convertir_fecha(reserva_data[4] if len(reserva_data) > 4 else None)
+            
+            # Construir la respuesta asegurando que todos los valores sean JSON serializables
             respuesta = {
-                "reserva_id": reserva_id,
-                "pasajero_id": reserva_data.get("pasajero_id") if isinstance(reserva_data, dict) else reserva_data[1],
-                "fecha_reserva": str(reserva_data.get("fecha_reserva")) if isinstance(reserva_data, dict) else str(reserva_data[2]),
-                "observacion": reserva_data.get("observacion") if isinstance(reserva_data, dict) else reserva_data[3],
-                "fecha_creacion": str(reserva_data.get("fecha_creacion")) if isinstance(reserva_data, dict) else str(reserva_data[4]) if len(reserva_data) > 4 else None,
+                "reserva_id": int(reserva_id),
+                "pasajero_id": int(pasajero_id_resp) if pasajero_id_resp is not None else None,
+                "fecha_reserva": fecha_reserva_resp,
+                "observacion": observacion_resp,
+                "fecha_creacion": fecha_creacion_resp,
                 "detalles_viaje": detalles_registrados
             }
             
