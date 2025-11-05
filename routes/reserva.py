@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from models.reserva import Reserva
 from tools.jwt_required import jwt_token_requerido
-from datetime import datetime
+from datetime import datetime, date
 
 #Crear un módulo blueprint para implementar el servicio web de reservas
 ws_reserva = Blueprint('ws_reserva', __name__)
@@ -28,15 +28,26 @@ def registrar():
     
     # Normalizar el formato de fecha (aceptar tanto 2025/11/05 como 2025-11-05)
     try:
+        fecha_obj = None
         # Intentar convertir si viene con formato YYYY/MM/DD
         if '/' in fecha_reserva:
-            fecha_obj = datetime.strptime(fecha_reserva, "%Y/%m/%d")
+            fecha_obj = datetime.strptime(fecha_reserva, "%Y/%m/%d").date()
             fecha_reserva = fecha_obj.strftime("%Y-%m-%d")
         # Si ya viene en formato YYYY-MM-DD, validar que sea válida
         elif '-' in fecha_reserva:
-            datetime.strptime(fecha_reserva, "%Y-%m-%d")
+            fecha_obj = datetime.strptime(fecha_reserva, "%Y-%m-%d").date()
         else:
             return jsonify({'status': False, 'data': None, 'message': 'Formato de fecha inválido. Use YYYY-MM-DD o YYYY/MM/DD'}), 400
+        
+        # Validar que la fecha de reserva sea del día de hoy en adelante
+        fecha_hoy = date.today()
+        if fecha_obj < fecha_hoy:
+            return jsonify({
+                'status': False, 
+                'data': None, 
+                'message': f'La fecha de reserva debe ser del día de hoy en adelante. Fecha enviada: {fecha_reserva}, Fecha de hoy: {fecha_hoy.strftime("%Y-%m-%d")}'
+            }), 400
+            
     except ValueError as e:
         return jsonify({'status': False, 'data': None, 'message': f'Formato de fecha inválido: {str(e)}. Use YYYY-MM-DD o YYYY/MM/DD'}), 400
     
