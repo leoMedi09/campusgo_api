@@ -3,6 +3,7 @@ from flask import Flask, jsonify
 from routes.usuario import ws_usuario
 from routes.vehiculo import ws_vehiculo
 from routes.reserva import ws_reserva
+from routes.viaje import ws_viaje
 import urllib.request
 import socket
 import os
@@ -15,6 +16,7 @@ app = Flask(__name__)
 app.register_blueprint(ws_usuario)
 app.register_blueprint(ws_vehiculo)
 app.register_blueprint(ws_reserva)
+app.register_blueprint(ws_viaje)
 
 
 
