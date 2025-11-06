@@ -142,7 +142,7 @@ def buscar_viajes():
     #Obtener los datos que se envían como parámetros de entrada (JSON)
     data = request.get_json() or {}
     
-    #Pasar los datos a variables    
+    #Pasar los datos a variables
     campo_busqueda = data.get("campo_busqueda", "")
     texto_busqueda = data.get("texto_busqueda", "")
     asientos_disponibles = data.get("asientos_disponibles")
@@ -151,7 +151,24 @@ def buscar_viajes():
     hasta = data.get("hasta")
     
     # Normalizar fechas a formato YYYY-MM-DD (con guiones) - SIEMPRE
+    # Si desde/hasta viene como string vacío "" desde Android (cuando el chip está tachado), se establece como None
     try:
+        # Limpiar espacios en blanco y convertir string vacío a None
+        if desde:
+            desde = desde.strip()
+            if not desde:  # Si después de strip queda vacío, convertir a None
+                desde = None
+        else:
+            desde = None
+            
+        if hasta:
+            hasta = hasta.strip()
+            if not hasta:  # Si después de strip queda vacío, convertir a None
+                hasta = None
+        else:
+            hasta = None
+        
+        # Si hay fechas, normalizar a formato YYYY-MM-DD
         if desde:
             # Convertir cualquier formato a YYYY-MM-DD
             if '/' in desde:
