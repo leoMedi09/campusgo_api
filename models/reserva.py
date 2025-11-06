@@ -320,17 +320,20 @@ class Reserva:
             params = []
             
             # Filtro por rango de fechas
-            # La columna fecha_hora_salida en la BD está en formato YYYY-MM-DD HH:MM:SS (DATETIME)
+            # La columna fecha_hora_salida en la BD está en formato DATETIME (YYYY-MM-DD HH:MM:SS)
             # La fecha viene en formato YYYY-MM-DD desde el endpoint (ej: 2025-11-05)
-            # Usar DATE() para extraer solo la fecha y comparar correctamente
+            # Necesitamos comparar la fecha de salida (fecha_hora_salida) con el rango desde-hasta
+            # DATE() extrae solo la parte de fecha del DATETIME para comparar correctamente
             if desde:
-                # Comparar directamente las fechas - DATE() extrae la fecha de fecha_hora_salida
-                # y comparamos con la fecha del parámetro (que ya está en formato YYYY-MM-DD)
-                sql += " AND DATE(v.fecha_hora_salida) >= %s"
+                # Comparar la fecha de salida (sin hora) con la fecha "desde"
+                # Esto incluye todos los viajes desde el inicio del día especificado
+                sql += " AND DATE(v.fecha_hora_salida) >= DATE(%s)"
                 params.append(desde)
             
             if hasta:
-                sql += " AND DATE(v.fecha_hora_salida) <= %s"
+                # Comparar la fecha de salida (sin hora) con la fecha "hasta"
+                # Esto incluye todos los viajes hasta el final del día especificado
+                sql += " AND DATE(v.fecha_hora_salida) <= DATE(%s)"
                 params.append(hasta)
             
             # Filtro por asientos disponibles
