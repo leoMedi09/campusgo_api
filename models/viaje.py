@@ -1,12 +1,15 @@
 from conexionBD import Conexion
 
 class Viaje:
-    def listar_viajes_con_usuarios(self):
+    def obtener_viaje_con_usuarios(self, viaje_id):
         """
-        Lista todos los viajes con los usuarios que han reservado cada viaje
+        Obtiene un viaje específico con los usuarios que han reservado ese viaje
+        
+        Args:
+            viaje_id: ID del viaje a obtener
         
         Returns:
-            tuple: (True, lista_viajes) si es exitoso, (False, mensaje_error) si hay error
+            tuple: (True, viaje_data) si es exitoso, (False, mensaje_error) si hay error
         """
         try:
             from datetime import datetime
@@ -14,7 +17,7 @@ class Viaje:
             con = Conexion().open
             cursor = con.cursor()
             
-            # Consulta SQL para obtener viajes con sus usuarios reservados
+            # Consulta SQL para obtener un viaje específico con sus usuarios reservados
             # Solo incluir reservas activas (estado_id no debe ser 18=cancelado ni 15=embarcado)
             sql = """
                 SELECT 
@@ -28,16 +31,22 @@ class Viaje:
                 LEFT JOIN reserva_viaje rv ON v.id = rv.viaje_id
                 LEFT JOIN reserva r ON rv.reserva_id = r.id
                 LEFT JOIN usuario u ON r.pasajero_id = u.id
-                WHERE v.estado_id = 1
+                WHERE v.id = %s
                 AND (rv.estado_id IS NULL OR rv.estado_id NOT IN (18, 15))
-                ORDER BY v.id, u.id
+                ORDER BY u.id
             """
             
-            cursor.execute(sql)
+            cursor.execute(sql, [viaje_id])
             resultados = cursor.fetchall()
             
-            # Agrupar resultados por viaje
-            viajes_dict = {}
+            # Verificar si el viaje existe
+            if not resultados:
+                cursor.close()
+                con.close()
+                return False, f'No se encontró el viaje con ID {viaje_id}'
+            
+            # Inicializar el diccionario del viaje
+            viaje_data = None
             
             for row in resultados:
                 # Función auxiliar para obtener valores
@@ -58,8 +67,8 @@ class Viaje:
                 nombre_completo = get_val("nombre_completo") or get_val_by_idx(4)
                 foto = get_val("foto") or get_val_by_idx(5) or "default"
                 
-                # Si el viaje no existe en el diccionario, crearlo
-                if viaje_id not in viajes_dict:
+                # Si el viaje no se ha inicializado, crearlo
+                if viaje_data is None:
                     # Formatear fecha_hora_salida a formato YYYY-MM-DD HH:MM:SS
                     fecha_hora_str = ""
                     if fecha_hora_salida:
@@ -97,7 +106,7 @@ class Viaje:
                         except:
                             fecha_hora_str = str(fecha_hora_salida) if fecha_hora_salida else ""
                     
-                    viajes_dict[viaje_id] = {
+                    viaje_data = {
                         "id": viaje_id,
                         "destino": destino,
                         "fecha_hora": fecha_hora_str,
@@ -112,17 +121,13 @@ class Viaje:
                         "foto": foto
                     }
                     # Evitar duplicados
-                    usuarios_existentes = viajes_dict[viaje_id]["usuariosReservados"]
-                    if not any(u["id"] == usuario["id"] for u in usuarios_existentes):
-                        usuarios_existentes.append(usuario)
-            
-            # Convertir diccionario a lista
-            viajes_lista = list(viajes_dict.values())
+                    if not any(u["id"] == usuario["id"] for u in viaje_data["usuariosReservados"]):
+                        viaje_data["usuariosReservados"].append(usuario)
             
             cursor.close()
             con.close()
             
-            return True, viajes_lista
+            return True, viaje_data
             
         except Exception as e:
             if 'con' in locals():
