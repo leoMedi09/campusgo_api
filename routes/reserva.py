@@ -231,4 +231,22 @@ def buscar_viajes():
             
     except Exception as e:
         return jsonify({'status': False, 'data': None, 'message': f'Error interno: {str(e)}'}), 500
-    
+
+#Endpoint para listar viajes con usuarios reservados
+@ws_reserva.route("/viaje/listar", methods=['GET'])
+@jwt_token_requerido
+def listar_viajes_con_usuarios():
+    """
+    Endpoint que devuelve la lista de viajes con los usuarios que han reservado cada viaje
+    """
+    try:
+        resultado, viajes = reserva.listar_viajes_con_usuarios()
+        
+        if resultado:
+            return jsonify(viajes), 200
+        else:
+            return jsonify({'status': False, 'data': None, 'message': viajes}), 500
+            
+    except Exception as e:
+        return jsonify({'status': False, 'data': None, 'message': f'Error interno: {str(e)}'}), 500
+     
