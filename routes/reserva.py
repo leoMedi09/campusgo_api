@@ -190,6 +190,10 @@ def buscar_viajes():
     
     #Buscar viajes
     try:
+        # Debug: imprimir los parámetros que se van a pasar al modelo
+        print(f"[DEBUG ROUTE] desde: {desde}, hasta: {hasta}")
+        print(f"[DEBUG ROUTE] asientos_disponibles: {asientos_disponibles}, sin_restricciones: {sin_restricciones}")
+        
         resultado, viajes = reserva.buscar_viajes(
             campo_busqueda=campo_busqueda,
             texto_busqueda=texto_busqueda,

@@ -287,24 +287,33 @@ class Reserva:
             cursor = con.cursor()
             
             # Construir la consulta SQL base
+            # Incluir todas las columnas necesarias para la respuesta
             sql = """
                 SELECT 
-                    v.id,
+                    v.id as viaje_id,
                     v.fecha_hora_salida,
                     v.fecha_hora_llegada,
-                    v.origen,
+                    COALESCE(v.punto_partida, v.origen) as punto_partida,
                     v.destino,
+                    v.lat_partida,
+                    v.lng_partida,
+                    v.lat_destino,
+                    v.lng_destino,
                     v.asientos_disponibles,
+                    COALESCE(v.asientos_ofertados, v.asientos_disponibles) as asientos_ofertados,
                     v.precio,
                     v.vehiculo_id,
                     ve.marca,
                     ve.modelo,
                     ve.placa,
                     ve.color,
+                    ve.id as vehiculo_id_detalle,
                     v.restricciones,
-                    v.estado_id
+                    v.estado_id,
+                    e.nombre as estado
                 FROM viaje v
                 INNER JOIN vehiculo ve ON v.vehiculo_id = ve.id
+                LEFT JOIN estado e ON v.estado_id = e.id
                 WHERE 1=1
             """
             
@@ -315,12 +324,13 @@ class Reserva:
             # La fecha viene en formato YYYY-MM-DD desde el endpoint (ej: 2025-11-05)
             # Usar DATE() para extraer solo la fecha y comparar correctamente
             if desde:
-                # Comparar directamente las fechas - convertir el parámetro a DATE para comparación correcta
-                sql += " AND DATE(v.fecha_hora_salida) >= CAST(%s AS DATE)"
+                # Comparar directamente las fechas - DATE() extrae la fecha de fecha_hora_salida
+                # y comparamos con la fecha del parámetro (que ya está en formato YYYY-MM-DD)
+                sql += " AND DATE(v.fecha_hora_salida) >= %s"
                 params.append(desde)
             
             if hasta:
-                sql += " AND DATE(v.fecha_hora_salida) <= CAST(%s AS DATE)"
+                sql += " AND DATE(v.fecha_hora_salida) <= %s"
                 params.append(hasta)
             
             # Filtro por asientos disponibles
@@ -332,25 +342,25 @@ class Reserva:
                 sql += " AND (v.restricciones IS NULL OR v.restricciones = '' OR v.restricciones = 'Sin restricciones')"
             
             # Filtro por búsqueda de texto
-            if texto_busqueda and campo_busqueda:
-                texto_busqueda_like = f"%{texto_busqueda}%"
-                if campo_busqueda.lower() == "destino":
-                    sql += " AND v.destino LIKE %s"
-                    params.append(texto_busqueda_like)
-                elif campo_busqueda.lower() == "origen":
-                    sql += " AND v.origen LIKE %s"
-                    params.append(texto_busqueda_like)
+            if texto_busqueda and texto_busqueda.strip():
+                texto_busqueda_like = f"%{texto_busqueda.strip()}%"
+                if campo_busqueda and campo_busqueda.strip():
+                    if campo_busqueda.lower().strip() == "destino":
+                        sql += " AND v.destino LIKE %s"
+                        params.append(texto_busqueda_like)
+                    elif campo_busqueda.lower().strip() == "origen":
+                        sql += " AND v.punto_partida LIKE %s"
+                        params.append(texto_busqueda_like)
+                    else:
+                        # Buscar en ambos campos
+                        sql += " AND (v.destino LIKE %s OR v.punto_partida LIKE %s)"
+                        params.append(texto_busqueda_like)
+                        params.append(texto_busqueda_like)
                 else:
-                    # Buscar en ambos campos
-                    sql += " AND (v.destino LIKE %s OR v.origen LIKE %s)"
+                    # Si hay texto pero no campo específico, buscar en ambos
+                    sql += " AND (v.destino LIKE %s OR v.punto_partida LIKE %s)"
                     params.append(texto_busqueda_like)
                     params.append(texto_busqueda_like)
-            elif texto_busqueda:
-                # Si hay texto pero no campo específico, buscar en ambos
-                texto_busqueda_like = f"%{texto_busqueda}%"
-                sql += " AND (v.destino LIKE %s OR v.origen LIKE %s)"
-                params.append(texto_busqueda_like)
-                params.append(texto_busqueda_like)
             
             # Solo mostrar viajes activos (estado_id = 1 o similar)
             sql += " AND v.estado_id = 1"
@@ -370,23 +380,58 @@ class Reserva:
             # Convertir los resultados a una lista de diccionarios
             viajes = []
             for row in resultados:
+                # Función auxiliar para obtener valores de forma segura
+                def get_val(key, default=None):
+                    if isinstance(row, dict):
+                        return row.get(key, default)
+                    return default
+                
+                def get_val_by_idx(idx, default=None):
+                    if isinstance(row, dict):
+                        return default
+                    return row[idx] if len(row) > idx else default
+                
+                # Formatear fecha_hora_salida a formato DD-MM-YYYY HH:MM:SS para la respuesta
+                fecha_salida_raw = get_val("fecha_hora_salida") or get_val_by_idx(1)
+                fecha_salida_str = ""
+                if fecha_salida_raw:
+                    try:
+                        from datetime import datetime
+                        if isinstance(fecha_salida_raw, str):
+                            # Si es string, intentar parsear
+                            if ' ' in fecha_salida_raw:
+                                fecha_obj = datetime.strptime(fecha_salida_raw.split()[0], "%Y-%m-%d")
+                                hora_str = fecha_salida_raw.split()[1] if len(fecha_salida_raw.split()) > 1 else "00:00:00"
+                            else:
+                                fecha_obj = datetime.strptime(fecha_salida_raw, "%Y-%m-%d")
+                                hora_str = "00:00:00"
+                            fecha_salida_str = fecha_obj.strftime("%d-%m-%Y") + " " + hora_str
+                        else:
+                            # Si es datetime, formatear directamente
+                            fecha_salida_str = fecha_salida_raw.strftime("%d-%m-%Y %H:%M:%S")
+                    except:
+                        fecha_salida_str = str(fecha_salida_raw)
+                
                 viaje = {
-                    "id": row.get("id") if isinstance(row, dict) else row[0],
-                    "fecha_hora_salida": str(row.get("fecha_hora_salida")) if isinstance(row, dict) else str(row[1]),
-                    "fecha_hora_llegada": str(row.get("fecha_hora_llegada")) if isinstance(row, dict) else str(row[2]),
-                    "origen": row.get("origen") if isinstance(row, dict) else row[3],
-                    "destino": row.get("destino") if isinstance(row, dict) else row[4],
-                    "asientos_disponibles": row.get("asientos_disponibles") if isinstance(row, dict) else row[5],
-                    "precio": float(row.get("precio")) if isinstance(row, dict) else float(row[6]),
-                    "vehiculo_id": row.get("vehiculo_id") if isinstance(row, dict) else row[7],
+                    "viaje_id": get_val("viaje_id") or get_val("id") or get_val_by_idx(0),
+                    "fecha_hora_salida": fecha_salida_str,
+                    "punto_partida": get_val("punto_partida") or get_val_by_idx(2),
+                    "destino": get_val("destino") or get_val_by_idx(3),
+                    "lat_partida": float(get_val("lat_partida") or get_val_by_idx(4) or 0),
+                    "lng_partida": float(get_val("lng_partida") or get_val_by_idx(5) or 0),
+                    "lat_destino": float(get_val("lat_destino") or get_val_by_idx(6) or 0),
+                    "lng_destino": float(get_val("lng_destino") or get_val_by_idx(7) or 0),
+                    "asientos_disponibles": int(get_val("asientos_disponibles") or get_val_by_idx(8) or 0),
+                    "asientos_ofertados": int(get_val("asientos_ofertados") or get_val_by_idx(9) or 0),
+                    "restricciones": get_val("restricciones") or get_val_by_idx(10) or "",
+                    "estado": get_val("estado") or get_val_by_idx(11) or "",
                     "vehiculo": {
-                        "marca": row.get("marca") if isinstance(row, dict) else row[8],
-                        "modelo": row.get("modelo") if isinstance(row, dict) else row[9],
-                        "placa": row.get("placa") if isinstance(row, dict) else row[10],
-                        "color": row.get("color") if isinstance(row, dict) else row[11]
-                    },
-                    "restricciones": row.get("restricciones") if isinstance(row, dict) else (row[12] if len(row) > 12 else None),
-                    "estado_id": row.get("estado_id") if isinstance(row, dict) else (row[13] if len(row) > 13 else None)
+                        "id": int(get_val("vehiculo_id_detalle") or get_val("vehiculo_id") or get_val_by_idx(12) or 0),
+                        "marca": get_val("marca") or get_val_by_idx(13) or "",
+                        "modelo": get_val("modelo") or get_val_by_idx(14) or "",
+                        "placa": get_val("placa") or get_val_by_idx(15) or "",
+                        "color": get_val("color") or get_val_by_idx(16) or ""
+                    }
                 }
                 viajes.append(viaje)
             
