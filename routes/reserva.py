@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from models.reserva import Reserva
+from models.viaje import Viaje
 from tools.jwt_required import jwt_token_requerido
 from datetime import datetime, date
 
@@ -8,6 +9,7 @@ ws_reserva = Blueprint('ws_reserva', __name__)
 
 #Instanciar la clase reserva
 reserva = Reserva()
+viaje = Viaje()
 
 #Endpoint para registrar reservas (posiblemente con multiples viajes)
 @ws_reserva.route("/reserva/registrar", methods=['POST'])
@@ -205,30 +207,43 @@ def buscar_viajes():
         except:
             pass
     
-    #Buscar viajes
+    #Buscar viajes usando el método listarViajes del modelo Viaje
     try:
         # Debug: imprimir los parámetros que se van a pasar al modelo
         print(f"[DEBUG ROUTE] desde: {desde}, hasta: {hasta}")
         print(f"[DEBUG ROUTE] asientos_disponibles: {asientos_disponibles}, sin_restricciones: {sin_restricciones}")
         
-        resultado, viajes = reserva.buscar_viajes(
-            campo_busqueda=campo_busqueda,
-            texto_busqueda=texto_busqueda,
-            asientos_disponibles=asientos_disponibles,
-            sin_restricciones=sin_restricciones,
-            desde=desde,
-            hasta=hasta
-        )
+        # Preparar los filtros para el método listarViajes
+        filtros = {
+            "campo_busqueda": campo_busqueda,
+            "texto_busqueda": texto_busqueda,
+            "asientos_disponibles": asientos_disponibles,
+            "sin_restricciones": sin_restricciones,
+            "desde": desde,
+            "hasta": hasta
+        }
         
-        if resultado:
+        # Llamar al método listarViajes del modelo Viaje
+        resultado = viaje.listarViajes(filtros)
+        
+        # El método listarViajes devuelve un diccionario con "data" y posiblemente "error"
+        if "error" in resultado:
             return jsonify({
-                'status': True,
-                'data': viajes,
-                'message': f'Se encontraron {len(viajes)} viaje(s)'
-            }), 200
-        else:
-            return jsonify({'status': False, 'data': None, 'message': viajes}), 500
+                'status': False,
+                'data': None,
+                'message': resultado.get("error", "Error al buscar viajes")
+            }), 500
+        
+        viajes_lista = resultado.get("data", [])
+        
+        return jsonify({
+            'status': True,
+            'data': viajes_lista,
+            'message': f'Se encontraron {len(viajes_lista)} viaje(s)'
+        }), 200
             
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'status': False, 'data': None, 'message': f'Error interno: {str(e)}'}), 500
      

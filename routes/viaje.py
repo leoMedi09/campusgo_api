@@ -13,6 +13,9 @@ viaje = Viaje()
 @jwt_token_requerido
 def listar_o_obtener_viajes_con_usuarios():
     try:
+       
+        base_url = request.host_url.rstrip('/')
+
         # Leer parámetros como string y sanitizar espacios
         viaje_id = request.args.get('id', type=str)
         if viaje_id is None:
@@ -22,6 +25,7 @@ def listar_o_obtener_viajes_con_usuarios():
         if viaje_id == "":
             viaje_id = None
 
+        # Elegir si listar todos o un solo viaje
         if viaje_id is not None:
             try:
                 viaje_id = int(viaje_id)
@@ -32,13 +36,29 @@ def listar_o_obtener_viajes_con_usuarios():
         else:
             resultado, data = viaje.listar_viajes_con_usuarios()
 
+        # Si la consulta fue exitosa, ajustar las URLs de las fotos
         if resultado:
+            for v in data:
+                # Si hay una foto, generar URL completa
+                if v.get("foto"):
+                    # Si la ruta ya comienza con "uploads", construimos URL completa
+                    if v["foto"].startswith("uploads/"):
+                        v["foto"] = f"{base_url}/{v['foto']}"
+                    else:
+                        # Si solo tiene el nombre (ej: "perfil1.jpg")
+                        v["foto"] = f"{base_url}/uploads/fotos/usuarios/{v['foto']}"
+                else:
+                    # Si no hay foto, usar la default
+                    v["foto"] = f"{base_url}/uploads/fotos/usuarios/default.png"
+
             return jsonify(data), 200
+
         else:
             return jsonify({'status': False, 'data': None, 'message': data}), 500
 
     except Exception as e:
         return jsonify({'status': False, 'data': None, 'message': f'Error interno: {str(e)}'}), 500
+
 
 
 

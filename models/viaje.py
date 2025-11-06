@@ -66,22 +66,24 @@ class Viaje:
 
             # Filtro por restricciones
             if str(filtros.get("sin_restricciones")).lower() in ["true", "1"]:
-                query += " AND (v.restricciones IS NULL OR TRIM(v.restricciones) = '' OR LOWER(v.restricciones) = 'ninguna')"
+                query += " AND (v.restricciones IS NULL OR TRIM(v.restricciones) = '' OR LOWER(TRIM(v.restricciones)) IN ('ninguna', 'sin restricciones'))"
 
             # Filtro por fecha desde
+            # La fecha_hora_salida está en formato DD-MM-YYYY HH:MM:SS (string)
             if filtros.get("desde"):
                 try:
                     desde = datetime.strptime(filtros["desde"], "%Y-%m-%d").strftime("%Y-%m-%d")
-                    query += " AND DATE(v.fecha_hora_salida) >= %s"
+                    query += " AND DATE(STR_TO_DATE(v.fecha_hora_salida, '%%d-%%m-%%Y %%H:%%i:%%s')) >= STR_TO_DATE(%s, '%%Y-%%m-%%d')"
                     params.append(desde)
                 except ValueError:
                     pass
 
             # Filtro por fecha hasta
+            # La fecha_hora_salida está en formato DD-MM-YYYY HH:MM:SS (string)
             if filtros.get("hasta"):
                 try:
                     hasta = datetime.strptime(filtros["hasta"], "%Y-%m-%d").strftime("%Y-%m-%d")
-                    query += " AND DATE(v.fecha_hora_salida) <= %s"
+                    query += " AND DATE(STR_TO_DATE(v.fecha_hora_salida, '%%d-%%m-%%Y %%H:%%i:%%s')) <= STR_TO_DATE(%s, '%%Y-%%m-%%d')"
                     params.append(hasta)
                 except ValueError:
                     pass
@@ -103,39 +105,50 @@ class Viaje:
             for v in viajes:
                 # Manejar el campo JSON de pasajeros reservados
                 pasajeros_lista = []
-                if v["pasajeros_reservados"]:
-                    # pymysql devuelve el JSON como un string, lo convertimos a lista
-                    pasajeros_lista = json.loads(v["pasajeros_reservados"])
+                if v.get("pasajeros_reservados"):
+                    try:
+                        # pymysql devuelve el JSON como un string, lo convertimos a lista
+                        if isinstance(v["pasajeros_reservados"], str):
+                            pasajeros_lista = json.loads(v["pasajeros_reservados"])
+                        elif isinstance(v["pasajeros_reservados"], list):
+                            pasajeros_lista = v["pasajeros_reservados"]
+                    except (json.JSONDecodeError, TypeError):
+                        pasajeros_lista = []
 
-                # Formatear fecha_hora_salida
+                # Formatear fecha_hora_salida a formato DD-MM-YYYY HH:MM:SS (como lo espera la app móvil)
                 fecha_hora_str = ""
                 if v["fecha_hora_salida"]:
                     try:
                         if isinstance(v["fecha_hora_salida"], str):
+                            # Si ya está en formato DD-MM-YYYY HH:MM:SS, mantenerlo
                             if ' ' in v["fecha_hora_salida"]:
                                 fecha_part = v["fecha_hora_salida"].split()[0]
                                 hora_str = v["fecha_hora_salida"].split()[1] if len(v["fecha_hora_salida"].split()) > 1 else "00:00:00"
+                                # Intentar parsear como DD-MM-YYYY primero (formato de BD)
                                 try:
                                     fecha_obj = datetime.strptime(fecha_part, "%d-%m-%Y")
-                                    fecha_hora_str = fecha_obj.strftime("%Y-%m-%d") + " " + hora_str
+                                    fecha_hora_str = fecha_obj.strftime("%d-%m-%Y") + " " + hora_str
                                 except:
+                                    # Si falla, intentar como YYYY-MM-DD
                                     try:
                                         fecha_obj = datetime.strptime(fecha_part, "%Y-%m-%d")
-                                        fecha_hora_str = fecha_obj.strftime("%Y-%m-%d") + " " + hora_str
+                                        fecha_hora_str = fecha_obj.strftime("%d-%m-%Y") + " " + hora_str
                                     except:
                                         fecha_hora_str = v["fecha_hora_salida"]
                             else:
+                                # Solo fecha, sin hora
                                 try:
                                     fecha_obj = datetime.strptime(v["fecha_hora_salida"], "%d-%m-%Y")
-                                    fecha_hora_str = fecha_obj.strftime("%Y-%m-%d") + " 00:00:00"
+                                    fecha_hora_str = fecha_obj.strftime("%d-%m-%Y") + " 00:00:00"
                                 except:
                                     try:
                                         fecha_obj = datetime.strptime(v["fecha_hora_salida"], "%Y-%m-%d")
-                                        fecha_hora_str = fecha_obj.strftime("%Y-%m-%d") + " 00:00:00"
+                                        fecha_hora_str = fecha_obj.strftime("%d-%m-%Y") + " 00:00:00"
                                     except:
                                         fecha_hora_str = v["fecha_hora_salida"] + " 00:00:00"
                         else:
-                            fecha_hora_str = v["fecha_hora_salida"].strftime("%Y-%m-%d %H:%M:%S")
+                            # Si es datetime, formatear a DD-MM-YYYY HH:MM:SS
+                            fecha_hora_str = v["fecha_hora_salida"].strftime("%d-%m-%Y %H:%M:%S")
                     except:
                         fecha_hora_str = str(v["fecha_hora_salida"]) if v["fecha_hora_salida"] else ""
 
