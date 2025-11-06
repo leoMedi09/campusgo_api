@@ -133,4 +133,81 @@ def cancelar():
     except Exception as e:
         #Manejo de errores internos en el servidor
         return jsonify({'status': False, 'data': None, 'message': f'Error interno:{str(e)}'}), 500
+
+
+#Endpoint para buscar/filtrar viajes
+@ws_reserva.route("/viajes/filtrar", methods=['POST'])
+@jwt_token_requerido
+def buscar_viajes():
+    #Obtener los datos que se envían como parámetros de entrada (JSON)
+    data = request.get_json() or {}
+    
+    #Pasar los datos a variables
+    campo_busqueda = data.get("campo_busqueda", "")
+    texto_busqueda = data.get("texto_busqueda", "")
+    asientos_disponibles = data.get("asientos_disponibles")
+    sin_restricciones = data.get("sin_restricciones", False)
+    desde = data.get("desde")
+    hasta = data.get("hasta")
+    
+    # Normalizar fechas a formato YYYY-MM-DD (con guiones) - SIEMPRE
+    try:
+        if desde:
+            # Convertir cualquier formato a YYYY-MM-DD
+            if '/' in desde:
+                fecha_obj = datetime.strptime(desde, "%Y/%m/%d").date()
+                desde = fecha_obj.strftime("%Y-%m-%d")  # Formato con guiones
+            elif '-' in desde:
+                # Validar formato y normalizar
+                fecha_obj = datetime.strptime(desde.split()[0], "%Y-%m-%d").date()
+                desde = fecha_obj.strftime("%Y-%m-%d")  # Asegurar formato con guiones
+            else:
+                return jsonify({'status': False, 'data': None, 'message': 'Formato de fecha "desde" inválido. Use YYYY-MM-DD o YYYY/MM/DD'}), 400
+        
+        if hasta:
+            # Convertir cualquier formato a YYYY-MM-DD
+            if '/' in hasta:
+                fecha_obj = datetime.strptime(hasta, "%Y/%m/%d").date()
+                hasta = fecha_obj.strftime("%Y-%m-%d")  # Formato con guiones
+            elif '-' in hasta:
+                # Validar formato y normalizar
+                fecha_obj = datetime.strptime(hasta.split()[0], "%Y-%m-%d").date()
+                hasta = fecha_obj.strftime("%Y-%m-%d")  # Asegurar formato con guiones
+            else:
+                return jsonify({'status': False, 'data': None, 'message': 'Formato de fecha "hasta" inválido. Use YYYY-MM-DD o YYYY/MM/DD'}), 400
+    except ValueError as e:
+        return jsonify({'status': False, 'data': None, 'message': f'Formato de fecha inválido: {str(e)}. Use YYYY-MM-DD o YYYY/MM/DD'}), 400
+    
+    # Validar que si se proporciona "desde", también se pueda validar "hasta"
+    if desde and hasta:
+        try:
+            fecha_desde = datetime.strptime(desde, "%Y-%m-%d").date()
+            fecha_hasta = datetime.strptime(hasta, "%Y-%m-%d").date()
+            if fecha_hasta < fecha_desde:
+                return jsonify({'status': False, 'data': None, 'message': 'La fecha "hasta" debe ser mayor o igual a la fecha "desde"'}), 400
+        except:
+            pass
+    
+    #Buscar viajes
+    try:
+        resultado, viajes = reserva.buscar_viajes(
+            campo_busqueda=campo_busqueda,
+            texto_busqueda=texto_busqueda,
+            asientos_disponibles=asientos_disponibles,
+            sin_restricciones=sin_restricciones,
+            desde=desde,
+            hasta=hasta
+        )
+        
+        if resultado:
+            return jsonify({
+                'status': True,
+                'data': viajes,
+                'message': f'Se encontraron {len(viajes)} viaje(s)'
+            }), 200
+        else:
+            return jsonify({'status': False, 'data': None, 'message': viajes}), 500
+            
+    except Exception as e:
+        return jsonify({'status': False, 'data': None, 'message': f'Error interno: {str(e)}'}), 500
     

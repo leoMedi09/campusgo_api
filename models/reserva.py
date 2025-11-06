@@ -269,3 +269,129 @@ class Reserva:
             #10. Cerrar el cursor y la conexión
             cursor.close()
             con.close()
+    
+    def buscar_viajes(self, campo_busqueda="", texto_busqueda="", asientos_disponibles=None, sin_restricciones=False, desde=None, hasta=None):
+        """
+        Buscar viajes con filtros
+        
+        Args:
+            campo_busqueda: Campo por el cual buscar (ej: "destino", "origen")
+            texto_busqueda: Texto a buscar
+            asientos_disponibles: True si solo mostrar viajes con asientos disponibles
+            sin_restricciones: True si solo mostrar viajes sin restricciones
+            desde: Fecha desde (formato YYYY-MM-DD)
+            hasta: Fecha hasta (formato YYYY-MM-DD)
+        """
+        try:
+            con = Conexion().open
+            cursor = con.cursor()
+            
+            # Construir la consulta SQL base
+            sql = """
+                SELECT 
+                    v.id,
+                    v.fecha_hora_salida,
+                    v.fecha_hora_llegada,
+                    v.origen,
+                    v.destino,
+                    v.asientos_disponibles,
+                    v.precio,
+                    v.vehiculo_id,
+                    ve.marca,
+                    ve.modelo,
+                    ve.placa,
+                    ve.color,
+                    v.restricciones,
+                    v.estado_id
+                FROM viaje v
+                INNER JOIN vehiculo ve ON v.vehiculo_id = ve.id
+                WHERE 1=1
+            """
+            
+            params = []
+            
+            # Filtro por rango de fechas
+            # La columna fecha_hora_salida en la BD está en formato YYYY-MM-DD HH:MM:SS (DATETIME)
+            # La fecha viene en formato YYYY-MM-DD desde el endpoint (ej: 2025-11-05)
+            # Usar DATE() para extraer solo la fecha y comparar correctamente
+            if desde:
+                # Extraer la fecha de fecha_hora_salida (YYYY-MM-DD) y comparar con fecha del filtro
+                sql += " AND DATE(v.fecha_hora_salida) >= STR_TO_DATE(%s, '%%Y-%%m-%%d')"
+                params.append(desde)
+            
+            if hasta:
+                sql += " AND DATE(v.fecha_hora_salida) <= STR_TO_DATE(%s, '%%Y-%%m-%%d')"
+                params.append(hasta)
+            
+            # Filtro por asientos disponibles
+            if asientos_disponibles is True:
+                sql += " AND v.asientos_disponibles > 0"
+            
+            # Filtro por restricciones
+            if sin_restricciones is True:
+                sql += " AND (v.restricciones IS NULL OR v.restricciones = '' OR v.restricciones = 'Sin restricciones')"
+            
+            # Filtro por búsqueda de texto
+            if texto_busqueda and campo_busqueda:
+                texto_busqueda = f"%{texto_busqueda}%"
+                if campo_busqueda.lower() == "destino":
+                    sql += " AND v.destino LIKE %s"
+                    params.append(texto_busqueda)
+                elif campo_busqueda.lower() == "origen":
+                    sql += " AND v.origen LIKE %s"
+                    params.append(texto_busqueda)
+                else:
+                    # Buscar en ambos campos
+                    sql += " AND (v.destino LIKE %s OR v.origen LIKE %s)"
+                    params.append(texto_busqueda)
+                    params.append(texto_busqueda)
+            elif texto_busqueda:
+                # Si hay texto pero no campo específico, buscar en ambos
+                texto_busqueda = f"%{texto_busqueda}%"
+                sql += " AND (v.destino LIKE %s OR v.origen LIKE %s)"
+                params.append(texto_busqueda)
+                params.append(texto_busqueda)
+            
+            # Solo mostrar viajes activos (estado_id = 1 o similar)
+            sql += " AND v.estado_id = 1"
+            
+            # Ordenar por fecha de salida
+            sql += " ORDER BY v.fecha_hora_salida ASC"
+            
+            cursor.execute(sql, params)
+            resultados = cursor.fetchall()
+            
+            # Convertir los resultados a una lista de diccionarios
+            viajes = []
+            for row in resultados:
+                viaje = {
+                    "id": row.get("id") if isinstance(row, dict) else row[0],
+                    "fecha_hora_salida": str(row.get("fecha_hora_salida")) if isinstance(row, dict) else str(row[1]),
+                    "fecha_hora_llegada": str(row.get("fecha_hora_llegada")) if isinstance(row, dict) else str(row[2]),
+                    "origen": row.get("origen") if isinstance(row, dict) else row[3],
+                    "destino": row.get("destino") if isinstance(row, dict) else row[4],
+                    "asientos_disponibles": row.get("asientos_disponibles") if isinstance(row, dict) else row[5],
+                    "precio": float(row.get("precio")) if isinstance(row, dict) else float(row[6]),
+                    "vehiculo_id": row.get("vehiculo_id") if isinstance(row, dict) else row[7],
+                    "vehiculo": {
+                        "marca": row.get("marca") if isinstance(row, dict) else row[8],
+                        "modelo": row.get("modelo") if isinstance(row, dict) else row[9],
+                        "placa": row.get("placa") if isinstance(row, dict) else row[10],
+                        "color": row.get("color") if isinstance(row, dict) else row[11]
+                    },
+                    "restricciones": row.get("restricciones") if isinstance(row, dict) else (row[12] if len(row) > 12 else None),
+                    "estado_id": row.get("estado_id") if isinstance(row, dict) else (row[13] if len(row) > 13 else None)
+                }
+                viajes.append(viaje)
+            
+            cursor.close()
+            con.close()
+            
+            return True, viajes
+            
+        except Exception as e:
+            if 'con' in locals():
+                if 'cursor' in locals():
+                    cursor.close()
+                con.close()
+            return False, f'Error al buscar viajes: {str(e)}'
