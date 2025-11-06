@@ -320,20 +320,19 @@ class Reserva:
             params = []
             
             # Filtro por rango de fechas
-            # La columna fecha_hora_salida en la BD está en formato DATETIME (YYYY-MM-DD HH:MM:SS)
+            # La columna fecha_hora_salida en la BD está almacenada en formato DD-MM-YYYY HH:MM:SS (string)
             # La fecha viene en formato YYYY-MM-DD desde el endpoint (ej: 2025-11-05)
-            # Necesitamos comparar la fecha de salida (fecha_hora_salida) con el rango desde-hasta
-            # DATE() extrae solo la parte de fecha del DATETIME para comparar correctamente
+            # Necesitamos convertir fecha_hora_salida de DD-MM-YYYY a DATE para comparar correctamente
             if desde:
-                # Comparar la fecha de salida (sin hora) con la fecha "desde"
-                # Esto incluye todos los viajes desde el inicio del día especificado
-                sql += " AND DATE(v.fecha_hora_salida) >= DATE(%s)"
+                # Convertir fecha_hora_salida de formato DD-MM-YYYY HH:MM:SS a DATE
+                # y comparar con la fecha "desde" en formato YYYY-MM-DD
+                sql += " AND DATE(STR_TO_DATE(v.fecha_hora_salida, '%%d-%%m-%%Y %%H:%%i:%%s')) >= STR_TO_DATE(%s, '%%Y-%%m-%%d')"
                 params.append(desde)
             
             if hasta:
-                # Comparar la fecha de salida (sin hora) con la fecha "hasta"
-                # Esto incluye todos los viajes hasta el final del día especificado
-                sql += " AND DATE(v.fecha_hora_salida) <= DATE(%s)"
+                # Convertir fecha_hora_salida de formato DD-MM-YYYY HH:MM:SS a DATE
+                # y comparar con la fecha "hasta" en formato YYYY-MM-DD
+                sql += " AND DATE(STR_TO_DATE(v.fecha_hora_salida, '%%d-%%m-%%Y %%H:%%i:%%s')) <= STR_TO_DATE(%s, '%%Y-%%m-%%d')"
                 params.append(hasta)
             
             # Filtro por asientos disponibles
@@ -365,7 +364,8 @@ class Reserva:
                     params.append(texto_busqueda_like)
                     params.append(texto_busqueda_like)
             
-            # Solo mostrar viajes activos (estado_id = 1 o similar)
+            # Solo mostrar viajes activos (estado_id = 1, que corresponde a "ACTIVO")
+            # Filtrar por estado_id = 1 para mostrar solo viajes activos
             sql += " AND v.estado_id = 1"
             
             # Ordenar por fecha de salida
@@ -374,11 +374,15 @@ class Reserva:
             # Debug: imprimir la consulta SQL y los parámetros para verificar
             print(f"[DEBUG] SQL: {sql}")
             print(f"[DEBUG] Params: {params}")
+            print(f"[DEBUG] desde: {desde}, hasta: {hasta}")
             
             cursor.execute(sql, params)
             resultados = cursor.fetchall()
             
             print(f"[DEBUG] Resultados encontrados: {len(resultados)}")
+            # Debug: mostrar los primeros resultados para verificar
+            if resultados:
+                print(f"[DEBUG] Primer resultado: {resultados[0] if len(resultados) > 0 else 'N/A'}")
             
             # Convertir los resultados a una lista de diccionarios
             viajes = []

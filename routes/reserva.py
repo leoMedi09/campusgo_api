@@ -142,7 +142,7 @@ def buscar_viajes():
     #Obtener los datos que se envían como parámetros de entrada (JSON)
     data = request.get_json() or {}
     
-    #Pasar los datos a variables
+    #Pasar los datos a variables    
     campo_busqueda = data.get("campo_busqueda", "")
     texto_busqueda = data.get("texto_busqueda", "")
     asientos_disponibles = data.get("asientos_disponibles")
