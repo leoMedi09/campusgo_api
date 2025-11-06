@@ -315,12 +315,12 @@ class Reserva:
             # La fecha viene en formato YYYY-MM-DD desde el endpoint (ej: 2025-11-05)
             # Usar DATE() para extraer solo la fecha y comparar correctamente
             if desde:
-                # Extraer la fecha de fecha_hora_salida (YYYY-MM-DD) y comparar con fecha del filtro
-                sql += " AND DATE(v.fecha_hora_salida) >= STR_TO_DATE(%s, '%%Y-%%m-%%d')"
+                # Comparar directamente las fechas - convertir el parámetro a DATE para comparación correcta
+                sql += " AND DATE(v.fecha_hora_salida) >= CAST(%s AS DATE)"
                 params.append(desde)
             
             if hasta:
-                sql += " AND DATE(v.fecha_hora_salida) <= STR_TO_DATE(%s, '%%Y-%%m-%%d')"
+                sql += " AND DATE(v.fecha_hora_salida) <= CAST(%s AS DATE)"
                 params.append(hasta)
             
             # Filtro por asientos disponibles
@@ -333,24 +333,24 @@ class Reserva:
             
             # Filtro por búsqueda de texto
             if texto_busqueda and campo_busqueda:
-                texto_busqueda = f"%{texto_busqueda}%"
+                texto_busqueda_like = f"%{texto_busqueda}%"
                 if campo_busqueda.lower() == "destino":
                     sql += " AND v.destino LIKE %s"
-                    params.append(texto_busqueda)
+                    params.append(texto_busqueda_like)
                 elif campo_busqueda.lower() == "origen":
                     sql += " AND v.origen LIKE %s"
-                    params.append(texto_busqueda)
+                    params.append(texto_busqueda_like)
                 else:
                     # Buscar en ambos campos
                     sql += " AND (v.destino LIKE %s OR v.origen LIKE %s)"
-                    params.append(texto_busqueda)
-                    params.append(texto_busqueda)
+                    params.append(texto_busqueda_like)
+                    params.append(texto_busqueda_like)
             elif texto_busqueda:
                 # Si hay texto pero no campo específico, buscar en ambos
-                texto_busqueda = f"%{texto_busqueda}%"
+                texto_busqueda_like = f"%{texto_busqueda}%"
                 sql += " AND (v.destino LIKE %s OR v.origen LIKE %s)"
-                params.append(texto_busqueda)
-                params.append(texto_busqueda)
+                params.append(texto_busqueda_like)
+                params.append(texto_busqueda_like)
             
             # Solo mostrar viajes activos (estado_id = 1 o similar)
             sql += " AND v.estado_id = 1"
@@ -358,8 +358,14 @@ class Reserva:
             # Ordenar por fecha de salida
             sql += " ORDER BY v.fecha_hora_salida ASC"
             
+            # Debug: imprimir la consulta SQL y los parámetros para verificar
+            print(f"[DEBUG] SQL: {sql}")
+            print(f"[DEBUG] Params: {params}")
+            
             cursor.execute(sql, params)
             resultados = cursor.fetchall()
+            
+            print(f"[DEBUG] Resultados encontrados: {len(resultados)}")
             
             # Convertir los resultados a una lista de diccionarios
             viajes = []
