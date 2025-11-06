@@ -19,13 +19,18 @@ class Config:
     # Default: read CA from db_ssl_ca_b64.txt if present and env var not set
     _default_ca_b64 = ''
     if not os.environ.get('DB_SSL_CA_B64'):
-        ca_file_path = os.path.join(os.path.dirname(os.path.dirname(file_)), 'db_ssl_ca_b64.txt')
-        if os.path.exists(_ca_file_path):
-            try:
-                with open(_ca_file_path, 'r') as f:
-                    _default_ca_b64 = f.read().strip()
-            except Exception:
-                pass
+        try:
+            # Try to get the directory of this config file
+            config_dir = os.path.dirname(os.path.abspath(__file__))
+            ca_file_path = os.path.join(os.path.dirname(config_dir), 'db_ssl_ca_b64.txt')
+            if os.path.exists(ca_file_path):
+                try:
+                    with open(ca_file_path, 'r') as f:
+                        _default_ca_b64 = f.read().strip()
+                except Exception:
+                    pass
+        except Exception:
+            pass
     DB_SSL_CA_B64 = os.environ.get('DB_SSL_CA_B64', _default_ca_b64)
 
     # Controls whether temporary debug endpoints are exposed (default: False)

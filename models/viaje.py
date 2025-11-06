@@ -1,6 +1,176 @@
-from conexionBD import Conexion
+import pymysql
+try:
+    from ..conexionBD import Conexion
+except ImportError:
+    from conexionBD import Conexion
+from datetime import datetime
+import json
 
 class Viaje:
+    def listarViajes(self, filtros):
+        """
+        Lista viajes con filtros opcionales y pasajeros reservados usando JSON_ARRAYAGG
+        """
+        try:
+            db = Conexion().open
+            cursor = db.cursor(pymysql.cursors.DictCursor)
+
+            query = """
+                SELECT 
+                    v.id AS viaje_id,
+                    v.punto_partida,
+                    v.destino,
+                    v.lat_partida,
+                    v.lng_partida,
+                    v.lat_destino,
+                    v.lng_destino,
+                    v.fecha_hora_salida,
+                    v.asientos_ofertados,
+                    v.asientos_disponibles,
+                    v.restricciones,
+                    e.nombre AS estado,
+                    veh.id AS vehiculo_id,
+                    veh.marca,
+                    veh.modelo,
+                    veh.placa,
+                    veh.color,
+                    (
+                        SELECT JSON_ARRAYAGG(
+                            JSON_OBJECT('id', u.id, 'foto_perfil', COALESCE(u.foto, 'default'))
+                        )
+                        FROM reserva_viaje rv
+                        JOIN reserva r ON rv.reserva_id = r.id
+                        JOIN usuario u ON r.pasajero_id = u.id
+                        WHERE rv.viaje_id = v.id AND rv.estado_id = 14
+                    ) AS pasajeros_reservados
+                FROM viaje v
+                JOIN vehiculo veh ON v.vehiculo_id = veh.id
+                JOIN estado e ON v.estado_id = e.id
+                WHERE 1=1
+            """
+
+            params = []
+            
+            # Filtro por campo de búsqueda
+            campo_busqueda = filtros.get("campo_busqueda")
+            texto_busqueda = filtros.get("texto_busqueda")
+
+            if campo_busqueda and texto_busqueda:
+                if campo_busqueda in ["punto_partida", "destino"]:
+                    query += f" AND LOWER(v.{campo_busqueda}) LIKE %s"
+                    params.append(f"%{texto_busqueda.lower()}%")
+
+            # Filtro por asientos disponibles
+            if str(filtros.get("asientos_disponibles")).lower() in ["true", "1"]:
+                query += " AND v.asientos_disponibles > 0"
+
+            # Filtro por restricciones
+            if str(filtros.get("sin_restricciones")).lower() in ["true", "1"]:
+                query += " AND (v.restricciones IS NULL OR TRIM(v.restricciones) = '' OR LOWER(v.restricciones) = 'ninguna')"
+
+            # Filtro por fecha desde
+            if filtros.get("desde"):
+                try:
+                    desde = datetime.strptime(filtros["desde"], "%Y-%m-%d").strftime("%Y-%m-%d")
+                    query += " AND DATE(v.fecha_hora_salida) >= %s"
+                    params.append(desde)
+                except ValueError:
+                    pass
+
+            # Filtro por fecha hasta
+            if filtros.get("hasta"):
+                try:
+                    hasta = datetime.strptime(filtros["hasta"], "%Y-%m-%d").strftime("%Y-%m-%d")
+                    query += " AND DATE(v.fecha_hora_salida) <= %s"
+                    params.append(hasta)
+                except ValueError:
+                    pass
+
+            # Solo mostrar viajes activos
+            query += " AND v.estado_id = 1"
+
+            # Ordenar por fecha de salida
+            query += " ORDER BY v.fecha_hora_salida ASC"
+            
+            cursor.execute(query, params)
+            viajes = cursor.fetchall()
+
+            cursor.close()
+            db.close()
+
+            resultado = {"data": []}
+
+            for v in viajes:
+                # Manejar el campo JSON de pasajeros reservados
+                pasajeros_lista = []
+                if v["pasajeros_reservados"]:
+                    # pymysql devuelve el JSON como un string, lo convertimos a lista
+                    pasajeros_lista = json.loads(v["pasajeros_reservados"])
+
+                # Formatear fecha_hora_salida
+                fecha_hora_str = ""
+                if v["fecha_hora_salida"]:
+                    try:
+                        if isinstance(v["fecha_hora_salida"], str):
+                            if ' ' in v["fecha_hora_salida"]:
+                                fecha_part = v["fecha_hora_salida"].split()[0]
+                                hora_str = v["fecha_hora_salida"].split()[1] if len(v["fecha_hora_salida"].split()) > 1 else "00:00:00"
+                                try:
+                                    fecha_obj = datetime.strptime(fecha_part, "%d-%m-%Y")
+                                    fecha_hora_str = fecha_obj.strftime("%Y-%m-%d") + " " + hora_str
+                                except:
+                                    try:
+                                        fecha_obj = datetime.strptime(fecha_part, "%Y-%m-%d")
+                                        fecha_hora_str = fecha_obj.strftime("%Y-%m-%d") + " " + hora_str
+                                    except:
+                                        fecha_hora_str = v["fecha_hora_salida"]
+                            else:
+                                try:
+                                    fecha_obj = datetime.strptime(v["fecha_hora_salida"], "%d-%m-%Y")
+                                    fecha_hora_str = fecha_obj.strftime("%Y-%m-%d") + " 00:00:00"
+                                except:
+                                    try:
+                                        fecha_obj = datetime.strptime(v["fecha_hora_salida"], "%Y-%m-%d")
+                                        fecha_hora_str = fecha_obj.strftime("%Y-%m-%d") + " 00:00:00"
+                                    except:
+                                        fecha_hora_str = v["fecha_hora_salida"] + " 00:00:00"
+                        else:
+                            fecha_hora_str = v["fecha_hora_salida"].strftime("%Y-%m-%d %H:%M:%S")
+                    except:
+                        fecha_hora_str = str(v["fecha_hora_salida"]) if v["fecha_hora_salida"] else ""
+
+                viaje = {
+                    "viaje_id": v["viaje_id"],
+                    "destino": v["destino"],
+                    "punto_partida": v["punto_partida"],
+                    "lat_partida": v["lat_partida"],
+                    "lng_partida": v["lng_partida"],
+                    "lat_destino": v["lat_destino"],
+                    "lng_destino": v["lng_destino"],
+                    "fecha_hora_salida": fecha_hora_str,
+                    "asientos_ofertados": v["asientos_ofertados"],
+                    "asientos_disponibles": v["asientos_disponibles"],
+                    "restricciones": v["restricciones"],
+                    "estado": v["estado"],
+                    "vehiculo": {
+                        "id": v["vehiculo_id"],
+                        "marca": v["marca"],
+                        "modelo": v["modelo"],
+                        "placa": v["placa"],
+                        "color": v["color"]
+                    },
+                    "pasajeros_reservados": pasajeros_lista
+                }
+                resultado["data"].append(viaje)
+
+            return resultado
+        except Exception as e:
+            if 'db' in locals():
+                if 'cursor' in locals():
+                    cursor.close()
+                db.close()
+            return {"data": [], "error": str(e)}
+
     def listar_viajes_con_usuarios(self):
         """
         Lista todos los viajes activos con los usuarios que han reservado cada viaje.
@@ -112,6 +282,7 @@ class Viaje:
                     cursor.close()
                 con.close()
             return False, f'Error al listar viajes con usuarios: {str(e)}'
+
     def obtener_viaje_con_usuarios(self, viaje_id):
         """
         Obtiene un viaje específico con los usuarios que han reservado ese viaje
@@ -247,4 +418,3 @@ class Viaje:
                     cursor.close()
                 con.close()
             return False, f'Error al listar viajes con usuarios: {str(e)}'
-

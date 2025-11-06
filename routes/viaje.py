@@ -13,7 +13,14 @@ viaje = Viaje()
 @jwt_token_requerido
 def listar_o_obtener_viajes_con_usuarios():
     try:
-        viaje_id = request.args.get('id') or request.args.get('viaje_id')
+        # Leer parámetros como string y sanitizar espacios
+        viaje_id = request.args.get('id', type=str)
+        if viaje_id is None:
+            viaje_id = request.args.get('viaje_id', type=str)
+        if isinstance(viaje_id, str):
+            viaje_id = viaje_id.strip()
+        if viaje_id == "":
+            viaje_id = None
 
         if viaje_id is not None:
             try:

@@ -5,7 +5,10 @@ pymysql.install_as_MySQLdb()
 
 import MySQLdb as dbc
 import MySQLdb.cursors
-from .config import Config
+try:
+    from .config import Config
+except ImportError:
+    from config import Config
 import os
 import base64
 import tempfile
