@@ -5,6 +5,8 @@ from tools.jwt_required import jwt_token_requerido
 from tools.security import password_validate
 import os
 from werkzeug.utils import secure_filename
+import pymysql
+
 
 #Crear un modulo blueprint para implementar el servicio web de usuario (login, cambiar clave, registrar, etc)
 ws_usuario = Blueprint('ws_usuario', __name__)
@@ -51,21 +53,37 @@ def login():
 
 
 #Crear un endpoint para obtener la foto del usuario mediante su id
-@ws_usuario.route('/usuario/foto/<id>', methods=['GET'])
+@ws_usuario.route("/usuario/foto/<int:usuario_id>", methods=["GET"])
 @jwt_token_requerido
-def obtener_foto(id):
-    #Validar si se cuenta con el ID para mostrar la foto
-    if not all([id]):
-        return jsonify({'status': False, 'data': None, 'message': 'Faltan datos obligatorios'}), 400
-    
+def obtener_foto_usuario(usuario_id):
     try:
-        resultado = usuario.obtener_foto(id)
-        if resultado:
-            return send_from_directory('uploads/fotos/usuarios', resultado['foto'])
+        con = Conexion().open
+        cursor = con.cursor(pymysql.cursors.DictCursor)
+        cursor.execute("SELECT foto FROM usuario WHERE id = %s", (usuario_id,))
+        result = cursor.fetchone()
+        cursor.close()
+        con.close()
+
+        ruta_base = os.path.join(os.getcwd(), "uploads", "fotos", "usuarios")
+
+        if not result or not result["foto"]:
+            return send_from_directory(ruta_base, "default.png")
+
+        ruta_foto = result["foto"]
+
+        # Si guarda solo el nombre, le agregamos el path
+        if not ruta_foto.startswith("uploads/"):
+            ruta_foto = os.path.join("uploads", "fotos", "usuarios", ruta_foto)
+
+        ruta_completa = os.path.join(os.getcwd(), ruta_foto)
+        if os.path.exists(ruta_completa):
+            directorio, archivo = os.path.split(ruta_completa)
+            return send_from_directory(directorio, archivo)
         else:
-            return send_from_directory('uploads/fotos/usuarios', 'default.png')
+            return send_from_directory(ruta_base, "default.png")
+
     except Exception as e:
-        return jsonify({'status': False, 'data': None, 'message': str(e)}), 500
+        return jsonify({"status": False, "message": f"Error al obtener la foto: {str(e)}"}), 500
 
 
 #Crear un endpoint para registrar nuevos usuarios

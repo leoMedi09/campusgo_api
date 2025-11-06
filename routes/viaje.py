@@ -40,3 +40,5 @@ def listar_o_obtener_viajes_con_usuarios():
     except Exception as e:
         return jsonify({'status': False, 'data': None, 'message': f'Error interno: {str(e)}'}), 500
 
+
+
